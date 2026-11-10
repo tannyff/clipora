@@ -78,7 +78,11 @@ class _ProjectScreenState extends State<ProjectScreen> with SingleTickerProvider
     super.dispose();
   }
 
+  Map? _mix;
+  bool get _mixing => const ['queued', 'running'].contains(_mix?['status']);
+
   bool get _hasWorkInProgress =>
+      _mixing ||
       _sources.any((s) => const ['uploaded', 'transcribing', 'planning'].contains(s['status'])) ||
       _variants.any((v) => const ['queued', 'rendering'].contains(v['status']));
 
@@ -115,6 +119,7 @@ class _ProjectScreenState extends State<ProjectScreen> with SingleTickerProvider
         _project = (r['project'] as Map).cast<String, dynamic>();
         _sources = r['sources'] as List;
         _variants = r['variants'] as List;
+        _mix = r['mix'] as Map?;
       });
       _warmLook();
     } catch (e) {
@@ -174,10 +179,7 @@ class _ProjectScreenState extends State<ProjectScreen> with SingleTickerProvider
   Future<void> _planMix() async {
     try {
       await Api.i.post('/api/projects/${widget.projectId}/plan-mix');
-      if (mounted) toast(context, 'AI собирает ролики из разных видео — они появятся во «Вариантах» через минуту-две');
-      Future.delayed(const Duration(seconds: 60), () {
-        if (mounted) _load();
-      });
+      _load();
     } catch (e) {
       if (mounted) toast(context, e.toString());
     }
@@ -454,11 +456,15 @@ class _ProjectScreenState extends State<ProjectScreen> with SingleTickerProvider
               ),
             if (_sources.where((s) => s['status'] == 'ready').length >= 2)
               OutlinedButton.icon(
-                onPressed: _planMix,
+                onPressed: _mixing ? null : _planMix,
                 icon: const Icon(Icons.merge_rounded, size: 18),
                 label: const Text('Смешать видео'),
               ),
           ]),
+          if (_mix != null) ...[
+            const SizedBox(height: 12),
+            _mixRow(),
+          ],
           const SizedBox(height: 16),
           if (_picking) ...[
             Panel(
@@ -579,6 +585,34 @@ class _ProjectScreenState extends State<ProjectScreen> with SingleTickerProvider
   }
 
   // ---------- Варианты ----------
+
+  // Состояние «Смешать видео»: идёт, готово (сколько роликов) или ошибка.
+  Widget _mixRow() {
+    final st = _mix?['status'];
+    final count = (_mix?['count'] as num?)?.toInt() ?? 0;
+    final (IconData icon, Color color, String text) = switch (st) {
+      'queued' => (Icons.schedule_rounded, C.muted, 'Смешивание видео в очереди — начнётся, как только сервер освободится'),
+      'running' => (Icons.merge_rounded, C.violet, 'AI собирает ролики из кусков разных видео… обычно 1–2 минуты'),
+      'failed' => (Icons.error_outline_rounded, C.red, 'Смешать не получилось: ${_mix?['error'] ?? ''}'),
+      _ => (Icons.check_circle_rounded, C.green, count > 0
+          ? 'Готово: $count ${count == 1 ? 'ролик' : 'роликов'} из нескольких видео — во «Вариантах», с пометкой «Из нескольких видео»'
+          : 'Смешивание закончилось, но новых роликов нет'),
+    };
+    return Panel(
+      padding: const EdgeInsets.all(14),
+      child: Row(children: [
+        if (_mixing)
+          const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+        else
+          Icon(icon, color: color, size: 20),
+        const SizedBox(width: 12),
+        Expanded(child: Text(text, style: TextStyle(fontSize: 13, color: st == 'failed' ? C.red : C.text))),
+        if (st == 'done' && count > 0)
+          TextButton(onPressed: () => _tabs.animateTo(1), child: const Text('Открыть')),
+        if (st == 'failed') TextButton(onPressed: _planMix, child: const Text('Ещё раз')),
+      ]),
+    );
+  }
 
   Widget _variantsTab(List<dynamic> proposed, bool wide) {
     if (proposed.isEmpty) {

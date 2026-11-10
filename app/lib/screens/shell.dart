@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import '../widgets/queue_bar.dart';
 import '../widgets/ui.dart';
 import 'accounts_screen.dart';
 import 'library_screen.dart';
+import 'plan_screen.dart';
 import 'projects_screen.dart';
 import 'settings_screen.dart';
 
@@ -20,6 +22,7 @@ class _ShellState extends State<Shell> {
   static const _items = [
     (Icons.video_library_outlined, Icons.video_library_rounded, 'Проекты'),
     (Icons.folder_outlined, Icons.folder_rounded, 'Аккаунты'),
+    (Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'План'),
     (Icons.movie_filter_outlined, Icons.movie_filter_rounded, 'Вставки'),
     (Icons.tune_outlined, Icons.tune_rounded, 'Настройки'),
   ];
@@ -36,6 +39,7 @@ class _ShellState extends State<Shell> {
     final page = IndexedStack(index: _tab, children: [
       const ProjectsScreen(),
       AccountsScreen(visible: _tab == 1),
+      PlanScreen(visible: _tab == 2),
       const LibraryScreen(),
       const SettingsScreen(),
     ]);
@@ -50,7 +54,10 @@ class _ShellState extends State<Shell> {
             const SizedBox(width: 6),
           ],
         ),
-        body: page,
+        body: Column(children: [
+          const Padding(padding: EdgeInsets.fromLTRB(12, 0, 12, 0), child: QueueBar()),
+          Expanded(child: page),
+        ]),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _tab,
           onDestinationSelected: (i) => setState(() => _tab = i),
@@ -75,6 +82,8 @@ class _ShellState extends State<Shell> {
             const SizedBox(height: 32),
             for (final (i, it) in _items.indexed) _navItem(i, it.$1, it.$2, it.$3),
             const Spacer(),
+            const QueueBar(),
+            const SizedBox(height: 10),
             _navTile(Icons.logout_rounded, 'Выйти', false, _logout),
           ]),
         ),

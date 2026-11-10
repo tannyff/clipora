@@ -91,6 +91,8 @@ class Api {
 
   String libraryThumbUrl(String mediaId) => '$apiBase/media/library/$mediaId/thumb?t=$token';
 
+  String zipUrl(List<String> ids) => '$apiBase/media/zip?t=$token&ids=${ids.join(',')}';
+
   String mediaUrl(String variantId, {bool download = false}) =>
       '$apiBase/media/variants/$variantId?t=$token${download ? '&download=1' : ''}';
 

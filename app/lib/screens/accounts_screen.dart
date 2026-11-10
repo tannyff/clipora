@@ -8,6 +8,7 @@ import 'package:video_player/video_player.dart';
 import '../api.dart';
 import '../theme.dart';
 import '../widgets/originality_view.dart';
+import '../widgets/stats_dialog.dart';
 import '../widgets/subtitle_preview.dart';
 import '../widgets/ui.dart';
 import 'editor_screen.dart';
@@ -306,16 +307,44 @@ class _AccountFolderScreenState extends State<AccountFolderScreen> {
 
   // ---------- Несколько сразу ----------
 
-  Future<void> _bulk(String action, {String? destination}) async {
+  Future<void> _bulk(String action, {String? destination, Map? look}) async {
     final ids = _sel.toList();
     if (action == 'delete' && !await _confirmDelete(ids.length)) return;
     setState(() => _busy = true);
     await _run(() async {
-      final r = await Api.i.post('/api/accounts/bulk', {'ids': ids, 'action': action, if (destination != null) 'destination': destination});
+      final r = await Api.i.post('/api/accounts/bulk', {
+        'ids': ids,
+        'action': action,
+        if (destination != null) 'destination': destination,
+        if (look != null) 'look': look,
+      });
       if (mounted) toast(context, 'Готово: ${r['changed']}');
       setState(_sel.clear);
     });
     if (mounted) setState(() => _busy = false);
+  }
+
+  // Одно оформление на все выбранные: окно открывается на первом из них, потом пересобираются все.
+  Future<void> _bulkLook() async {
+    if (_styles.isEmpty) await _loadStatic();
+    final first = _items.where((v) => _sel.contains(v['id'])).firstOrNull;
+    if (first == null || !mounted || _styles.isEmpty) return;
+    final picked = await showLookDialog(context,
+        variant: first, styles: _styles, look: (first['look'] as Map?)?.cast<String, dynamic>() ?? const {});
+    if (picked != null && mounted) await _bulk('look', look: picked);
+  }
+
+  void _bulkZip() {
+    final ids = [
+      for (final v in _items)
+        if (_sel.contains(v['id']) && const ['ready', 'exported'].contains(v['status'])) v['id'] as String
+    ];
+    if (ids.isEmpty) {
+      toast(context, 'Среди выбранных нет готовых роликов');
+      return;
+    }
+    launchUrl(Uri.parse(Api.i.zipUrl(ids)), webOnlyWindowName: '_blank');
+    toast(context, 'Собираю архив из ${ids.length} роликов — скачивание начнётся само');
   }
 
   // Браузер скачивает по одному с паузой, иначе часть файлов он молча отбросит.
@@ -432,6 +461,18 @@ class _AccountFolderScreenState extends State<AccountFolderScreen> {
                       style: FilledButton.styleFrom(backgroundColor: C.violet),
                       icon: const Icon(Icons.download_rounded, size: 18),
                       label: const Text('Скачать')),
+                  OutlinedButton.icon(
+                      onPressed: _bulkZip,
+                      icon: const Icon(Icons.folder_zip_outlined, size: 18),
+                      label: const Text('Одним архивом')),
+                  OutlinedButton.icon(
+                      onPressed: _bulkLook,
+                      icon: const Icon(Icons.palette_outlined, size: 18),
+                      label: const Text('Оформление на все')),
+                  OutlinedButton.icon(
+                      onPressed: () => _bulk('rebuild'),
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Пересобрать')),
                   OutlinedButton.icon(
                       onPressed: () async {
                         final to = await _pickAccount('Перенести в папку');
@@ -559,6 +600,14 @@ class _AccountFolderScreenState extends State<AccountFolderScreen> {
                     icon: Icon(published ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
                         size: 18, color: published ? C.green : null),
                     label: Text(published ? 'Опубликован' : 'Опубликовала'),
+                  ),
+                if (published)
+                  TextButton.icon(
+                    onPressed: () async {
+                      if (await editStats(context, v)) _load();
+                    },
+                    icon: const Icon(Icons.bar_chart_rounded, size: 18),
+                    label: Text(v['views'] == null ? 'Внести охваты' : '${shortNum(v['views'] as num)} просмотров'),
                   ),
               ]),
             ]),
