@@ -1,0 +1,8 @@
+.DS_Store
+# Видео, базы и ключи в историю не попадают
+server/data/
+server/.env
+**/.dart_tool/
+app/build/
+_backup_*/
+.tmp/
